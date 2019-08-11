@@ -1,6 +1,7 @@
 import json
 import dateutil.parser
 import sys
+import ipdb
 
 attempt_tracking = {}
 # Creating a dict to store/update attempts of money transfer.
@@ -15,9 +16,10 @@ def in_same_week(iso_time, customer_id):
             prev_entry = attempt_tracking[customer_id]['weekly_attempt_log'][-1]
             prev_weekday = dateutil.parser.parse(prev_entry).weekday()
             current_weekday = dateutil.parser.parse(iso_time).weekday()
+            consec_delta = dateutil.parser.parse(iso_time) - dateutil.parser.parse(prev_entry)
             if current_weekday > prev_weekday:
                 return True  # in the same week
-            elif (current_weekday == prev_weekday) and delta.days == 0:
+            elif (current_weekday == prev_weekday) and consec_delta.days == 0:
                 return True
             else:
                 #monday has passed, week paramaters to refresh
@@ -40,8 +42,9 @@ def within_a_day(iso_time, customer_id):
     if has_attempts:
         prev_time = attempt_tracking[customer_id]['weekly_attempt_log'][-1]
         delta = dateutil.parser.parse(iso_time) - dateutil.parser.parse(prev_time)
-    
-        if delta.days == 0:
+        prev_day = dateutil.parser.parse(prev_time).weekday()
+        current_day = dateutil.parser.parse(iso_time).weekday()
+        if delta.days == 0 and prev_day == current_day:
             return True
         else:
             return False
@@ -113,22 +116,20 @@ def load_funds(attempt):
             return load_limit_checks(iso_time, customer_id, load_amount)
 
 
+def process_transactions(input_file='input.txt', output_file='output.txt'):
+    in_file = open(input_file, 'r')
+    out_file = open(output_file, 'w+')
+    for line in in_file:
+        attempt = json.loads(line)
+        x = load_funds(attempt)
+        if x == 'transaction_exists':
+            continue
+        else:
+            # print(attempt_tracking)
+            output = json.dumps({"id":attempt['id'],'customer_id':attempt['customer_id'],'accepted':x})
+            out_file.write(f'{output}\n')
+    in_file.close()
+    out_file.close()
 
-input_file = sys.argv[1] if len(sys.argv) >= 2 else 'input.txt'
-output_file = sys.argv[2] if len(sys.argv) >= 3 else 'output.txt'
-
-in_file = open(input_file, 'r')
-out_file = open(output_file, 'a+')
-
-for line in in_file:
-    attempt = json.loads(line)
-    x = load_funds(attempt)
-    if x == 'transaction_exists':
-        continue
-    else:
-        output = json.dumps({"id":attempt['id'], 'customer_id':attempt['customer_id'], 'accepted':x})
-        out_file.write(f'{output}\n')
-in_file.close()
-out_file.close()
-
-
+if __name__ == '__main__':
+    process_transactions()
