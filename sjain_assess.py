@@ -127,7 +127,7 @@ for line in in_file:
         continue
     else:
         output = json.dumps({"id":attempt['id'], 'customer_id':attempt['customer_id'], 'accepted':x})
-        outFile.write(f'{output}\n')
+        out_file.write(f'{output}\n')
 in_file.close()
 out_file.close()
 
