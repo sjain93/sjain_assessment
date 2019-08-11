@@ -1,30 +1,32 @@
 import json
-import datetime
 import dateutil.parser
-import ipdb
+import sys
 
 attempt_tracking = {}
 # Creating a dict to store/update attempts of money transfer.
 
-def week_checks(iso_time, customer_id):
+def in_same_week(iso_time, customer_id):
     # checking to see if we're in the same week by cycles of Monday
-    first_day_week = attempt_tracking[customer_id]['weekly_attempt_log'][0]
-    delta = dateutil.parser.parse(iso_time) - dateutil.parser.parse(first_day_week)
-    if delta.days < 7:
-        prev_entry = attempt_tracking[customer_id]['weekly_attempt_log'][-1]
-        prev_weekday = dateutil.parser.parse(prev_entry).weekday()
-        current_weekday = dateutil.parser.parse(iso_time).weekday()
-        if current_weekday > prev_weekday:
-            return True  # in the same week
-        elif (current_weekday == prev_weekday) and delta.days == 0:
-            return True
+    has_attempts = len(attempt_tracking[customer_id]['weekly_attempt_log']) > 0
+    if has_attempts:
+        first_day_week = attempt_tracking[customer_id]['weekly_attempt_log'][0]
+        delta = dateutil.parser.parse(iso_time) - dateutil.parser.parse(first_day_week)
+        if delta.days < 7:
+            prev_entry = attempt_tracking[customer_id]['weekly_attempt_log'][-1]
+            prev_weekday = dateutil.parser.parse(prev_entry).weekday()
+            current_weekday = dateutil.parser.parse(iso_time).weekday()
+            if current_weekday > prev_weekday:
+                return True  # in the same week
+            elif (current_weekday == prev_weekday) and delta.days == 0:
+                return True
+            else:
+                #monday has passed, week paramaters to refresh
+                return False
         else:
-            #monday has passed, week paramaters to refresh
+            # week parameters refresh
             return False
-    else:
-        # week parameters refresh
-        return False
-
+    else:#return True if its the first valid transaction in the week
+        return True
 
 def daily_count_check(customer_id):
     if attempt_tracking[customer_id]['daily_count'] > 2:
@@ -34,7 +36,8 @@ def daily_count_check(customer_id):
 
 
 def within_a_day(iso_time, customer_id):
-    try:
+    has_attempts = len(attempt_tracking[customer_id]['weekly_attempt_log']) > 0
+    if has_attempts:
         prev_time = attempt_tracking[customer_id]['weekly_attempt_log'][-1]
         delta = dateutil.parser.parse(iso_time) - dateutil.parser.parse(prev_time)
     
@@ -42,12 +45,11 @@ def within_a_day(iso_time, customer_id):
             return True
         else:
             return False
-
-    except IndexError:
+    else:
         return False
             
 
-def day_checks(iso_time, customer_id, load_amount):
+def load_limit_checks(iso_time, customer_id, load_amount):
     if within_a_day(iso_time, customer_id):
         if daily_count_check(customer_id):
             if ((attempt_tracking[customer_id]['daily_amount'] + load_amount) < 5000) and ((attempt_tracking[customer_id]['weekly_amount'] + load_amount) <20000):
@@ -103,18 +105,22 @@ def load_funds(attempt):
         return 'transaction_exists'
     else:
         attempt_tracking[customer_id]['transaction'] = transaction_id
-        if week_checks(iso_time, customer_id):
-            return day_checks(iso_time,customer_id,load_amount)
+        if in_same_week(iso_time, customer_id):
+            return load_limit_checks(iso_time,customer_id,load_amount)
         else:
             attempt_tracking[customer_id]['weekly_attempt_log'] = []
             attempt_tracking[customer_id]['weekly_amount'] = 0
-            return day_checks(iso_time, customer_id, load_amount)
+            return load_limit_checks(iso_time, customer_id, load_amount)
 
 
 
-file = open('input.txt', 'r')
-outFile = open('output.txt', 'a+')
-for line in file:
+input_file = sys.argv[1] if len(sys.argv) >= 2 else 'input.txt'
+output_file = sys.argv[2] if len(sys.argv) >= 3 else 'output.txt'
+
+in_file = open(input_file, 'r')
+out_file = open(output_file, 'a+')
+
+for line in in_file:
     attempt = json.loads(line)
     x = load_funds(attempt)
     if x == 'transaction_exists':
@@ -122,5 +128,7 @@ for line in file:
     else:
         output = json.dumps({"id":attempt['id'], 'customer_id':attempt['customer_id'], 'accepted':x})
         outFile.write(f'{output}\n')
-    
+in_file.close()
+out_file.close()
+
 
